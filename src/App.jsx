@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import PricingWizard from "./PricingWizard";
+import InsuranceDashboard from "./InsuranceDashboard";
+
+
+const API_URL = "https://dac-healthprice-api.onrender.com";
 
 const NAVY = "#0d2b7a";
 const NAVY_D = "#091d5e";
@@ -63,6 +67,7 @@ export default function App() {
   const [page, setPage] = useState("Home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrollY, setScrollY] = useState(0);
+
   useEffect(() => {
     const h = () => setScrollY(window.scrollY);
     window.addEventListener("scroll", h, { passive: true });
@@ -155,6 +160,7 @@ export default function App() {
       {page === "Pricing" && <PricingPage />}
       {page === "About" && <AboutPage />}
       {page === "Contact" && <ContactPage />}
+      {page === "Admin" && <InsuranceDashboard />}
 
       {/* ═══ FOOTER ═══ */}
       <footer style={{ background: NAVY_D, color: GRAY, padding: "64px 24px 32px" }}>
@@ -179,7 +185,6 @@ export default function App() {
                 { label: "Get a Quote", go: "Pricing" },
               ].map(s => <p key={s.label} onClick={() => { setPage(s.go); window.scrollTo(0,0); }} style={{ fontSize: 14, marginBottom: 10, cursor: "pointer" }}>{s.label}</p>)}
               <p onClick={() => { setPage("Admin"); window.scrollTo(0,0); }} style={{ fontSize: 12, marginTop: 16, cursor: "pointer", opacity: 0.4 }}>Admin portal</p>
-              <p onClick={() => { setPage("AutoLab"); window.scrollTo(0,0); }} style={{ fontSize: 12, marginTop: 6, cursor: "pointer", opacity: 0.4 }}>Auto Pricing Lab</p>
             </div>
             <div>
               <h4 style={{ color: WHITE, fontSize: 14, fontWeight: 600, marginBottom: 16, textTransform: "uppercase", letterSpacing: 1 }}>Contact</h4>
