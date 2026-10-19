@@ -144,28 +144,18 @@ const LOAD = { ipd: 0.30, opd: 0.25, dental: 0.20, maternity: 0.25 };
 function localPrice(inp) {
   const agef = 1 + Math.max(0, (inp.age - 35)) * 0.008;
   const sf = { Never: 1, Former: 1.15, Current: 1.40 }[inp.smoking_status] || 1;
-  const weeklyMins = (inp.exercise_days || 0) * (inp.exercise_mins || 0);
-  const ef = weeklyMins <= 0 ? 1.20 : weeklyMins < 60 ? 1.10 : weeklyMins < 150 ? 0.95 : weeklyMins < 300 ? 0.85 : 0.75;
   const of_ = { "Office/Desk": 0.85, "Retail/Service": 1, "Healthcare": 1.05, "Manual Labor": 1.15, "Industrial/High-Risk": 1.30, "Retired": 1.10 }[inp.occupation_type] || 1;
   const pf = 1 + (inp.preexist_conditions.filter(p => p !== "None").length) * 0.20;
-  // New risk factors
-  const bmi = inp.bmi_weight && inp.bmi_height ? inp.bmi_weight / ((inp.bmi_height / 100) ** 2) : 22;
-  const bmif = bmi < 18.5 ? 1.10 : bmi < 25 ? 1.00 : bmi < 30 ? 1.15 : 1.35;
-  const alf = { Never: 1.00, Occasional: 1.05, Regular: 1.20, Heavy: 1.45 }[inp.alcohol] || 1.00;
-  const hospf = inp.prev_hospitalizations === 0 ? 1.00 : inp.prev_hospitalizations === 1 ? 1.25 : inp.prev_hospitalizations === 2 ? 1.50 : 1.80;
-  const medf = (inp.medications_count || 0) === 0 ? 1.00 : (inp.medications_count || 0) <= 2 ? 1.15 : (inp.medications_count || 0) <= 4 ? 1.30 : 1.50;
-  const fhf = 1 + ((inp.family_history || []).filter(x => x !== "None").length) * 0.10;
-  const mrf = { Single: 1.05, Married: 1.00, Divorced: 1.08, Widowed: 1.08 }[inp.marital_status] || 1.00;
-  const df = { Healthy: 0.90, Balanced: 1.00, "High Processed": 1.15 }[inp.diet] || 1.00;
-  const slf = { "Good (7-9h)": 1.00, "Fair (5-7h)": 1.10, "Poor (<5h)": 1.25 }[inp.sleep_quality] || 1.00;
-  const stf = { Low: 1.00, Moderate: 1.10, High: 1.25 }[inp.stress_level] || 1.00;
-  const mbf = inp.motorbike_daily === "Daily" ? 1.15 : inp.motorbike_daily === "Occasional" ? 1.05 : 1.00;
-  const waf = { "Piped/Safe": 1.00, "Well/Mixed": 1.08, "Limited": 1.18 }[inp.water_access] || 1.00;
-  const hpxf = { "<5km": 1.00, "5-20km": 1.05, ">20km": 1.12 }[inp.healthcare_proximity] || 1.00;
 
+  // The provisional estimate must be computed on the SAME basis as the
+  // actuarial model: age, gender, smoking, occupation and pre-existing count.
+  // It used to apply seventeen factors — alcohol alone loaded the premium by
+  // up to 45% — none of which are in the fitted model, so an applicant who
+  // saw a provisional figure and then the real one got two numbers built on
+  // different bases with no way to reconcile them.
   const calc = (cov) => {
-    const freq = FB_FREQ[cov] * agef * sf * ef * of_ * pf * bmif * alf * hospf * medf * fhf * mrf * df * slf * stf * mbf * waf;
-    const sev = FB_SEV[cov] * (1 + Math.max(0, (inp.age - 30)) * 0.006) * hpxf;
+    const freq = FB_FREQ[cov] * agef * sf * of_ * pf;
+    const sev = FB_SEV[cov] * (1 + Math.max(0, (inp.age - 30)) * 0.006);
     return { frequency: Math.round(freq * 1000) / 1000, severity: Math.round(sev), expected_annual_cost: Math.round(freq * sev * 100) / 100, source: "local" };
   };
 
