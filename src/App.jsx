@@ -3,7 +3,7 @@ import PricingWizard from "./PricingWizard";
 import InsuranceDashboard from "./InsuranceDashboard";
 
 
-const API_URL = "https://dac-healthprice-api.onrender.com";
+const API_URL = "https://dac-healthprice-backend.onrender.com";
 
 const NAVY = "#0d2b7a";
 const NAVY_D = "#091d5e";
@@ -508,7 +508,7 @@ function PricingPage() {
             <div>5. Replace PricingPage body with: <code>{"<PricingWizard />"}</code></div>
           </div>
           <div style={{ marginTop: 20, padding: 16, background: `rgba(245,197,99,0.1)`, borderRadius: 12, borderLeft: `3px solid ${GOLD}` }}>
-            <p style={{ fontSize: 14, color: TXT, margin: 0 }}>Both files are in your outputs. The wizard connects to your Render backend at <code>https://dac-healthprice-api.onrender.com</code></p>
+            <p style={{ fontSize: 14, color: TXT, margin: 0 }}>Both files are in your outputs. The wizard connects to your Render backend at <code>https://dac-healthprice-backend.onrender.com</code></p>
           </div>
         </div>
       </div>
@@ -601,7 +601,7 @@ function AdminPage() {
   const [covType, setCovType] = useState("ipd");
   const [autoRetrain, setAutoRetrain] = useState(false);
  
-  const API = "https://dac-healthprice-api.onrender.com";
+  const API = "https://dac-healthprice-backend.onrender.com";
  
   const checkHealth = async () => {
     try {

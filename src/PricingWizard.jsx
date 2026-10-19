@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
-const API = "https://snowy-haze-f313.poungrotha01555.workers.dev";
+const API = "https://dac-healthprice-backend.onrender.com";
 const LOGO_URL = "/DAC.png"; // Your logo in /public
 
 function getBrowserId() {
@@ -22,6 +22,69 @@ async function apiCall(path, body, extraHeaders = {}) {
     throw new Error(e.detail || `Error ${r.status}`);
   }
   return r.json();
+}
+
+// The pricing service sleeps when idle and takes up to about two minutes to
+// wake. A single failed call used to drop the applicant straight onto the
+// local estimate, which is never sent to the server -- so the quote existed
+// in the customer's browser and nowhere else, and the underwriting queue
+// never saw it. Retry across that cold start before giving up.
+async function apiCallWithRetry(path, body, extraHeaders = {}, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await apiCall(path, body, extraHeaders);
+    } catch (err) {
+      lastErr = err;
+      // Don't burn retries on a request the server actively rejected
+      // (validation, rate limit) -- only on reaching it at all.
+      if (/^Error 4\d\d/.test(String(err.message)) && !/408|429/.test(String(err.message))) throw err;
+      if (i < attempts - 1) await new Promise(res => setTimeout(res, 3000 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+// ─── Unsent quotes ──────────────────────────────────────────────────────────
+// When the service cannot be reached we keep the applicant's ANSWERS, not the
+// locally computed premium: on reconnect they are repriced by the real model
+// so the record that reaches the underwriting queue comes from the actuarial
+// basis, never from the browser's simplified factor table.
+const PENDING_KEY = "dac_pending_quotes";
+
+function readPending() {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function queuePending(inputs) {
+  try {
+    const q = readPending();
+    q.push({ inputs, queued_at: new Date().toISOString(), browser_id: getBrowserId() });
+    localStorage.setItem(PENDING_KEY, JSON.stringify(q.slice(-20)));
+  } catch { /* storage unavailable: nothing more we can do here */ }
+}
+
+async function flushPending() {
+  const q = readPending();
+  if (!q.length) return { sent: 0, left: 0 };
+  const left = [];
+  let sent = 0;
+  for (const item of q) {
+    try {
+      const session = await apiCall("/api/v2/session",
+        { email: item.inputs.email || "", browser_id: item.browser_id });
+      await apiCall("/api/v2/price",
+        { ...item.inputs, browser_id: item.browser_id }, { "X-Session-Token": session.token });
+      sent++;
+    } catch (err) {
+      // Still unreachable: keep it. Rejected outright: drop it, retrying
+      // a request the server will never accept just blocks the queue.
+      if (!/^Error 4\d\d/.test(String(err.message))) left.push(item);
+    }
+  }
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(left)); } catch { /* ignore */ }
+  return { sent, left: left.length };
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -307,7 +370,22 @@ export default function PricingWizard() {
   };
 
   useEffect(() => {
-    apiCall("/health").then(() => setApiOk(true)).catch(() => setApiOk(false));
+    apiCall("/health")
+      .then(() => { setApiOk(true); return flushPending(); })
+      .catch(() => setApiOk(false));
+  }, []);
+
+  // Anything stranded while the service was down is repriced and recorded as
+  // soon as it answers again, so the underwriting queue catches up by itself
+  // rather than waiting for the applicant to come back.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!readPending().length) return;
+      apiCall("/health").then(() => { setApiOk(true); return flushPending(); }).catch(() => {});
+    }, 60000);
+    const onOnline = () => { apiCall("/health").then(() => flushPending()).catch(() => {}); };
+    window.addEventListener("online", onOnline);
+    return () => { clearInterval(id); window.removeEventListener("online", onOnline); };
   }, []);
 
   const u = (k, v) => setInp(p => {
@@ -334,11 +412,18 @@ export default function PricingWizard() {
     setLoading(true); setResult(null); setIsLocal(false);
     let res;
     try {
-      const session = await apiCall("/api/v2/session", { email: target.email || "", browser_id: getBrowserId() });
-      res = await apiCall("/api/v2/price", { ...target, browser_id: getBrowserId() }, { "X-Session-Token": session.token });
+      const session = await apiCallWithRetry("/api/v2/session", { email: target.email || "", browser_id: getBrowserId() });
+      res = await apiCallWithRetry("/api/v2/price", { ...target, browser_id: getBrowserId() }, { "X-Session-Token": session.token });
       setResult(res);
+      setApiOk(true);
+      // Connectivity is back: push anything that was stranded earlier.
+      flushPending().catch(() => {});
     } catch {
+      // Keep the answers so this quote still reaches the underwriting queue
+      // once the service is reachable again.
+      queuePending(target);
       res = localPrice(target); setResult(res); setIsLocal(true);
+      setApiOk(false);
     } finally {
       setLoading(false); setStep(5);
     }
@@ -1180,7 +1265,7 @@ export default function PricingWizard() {
                 <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 6, background: "var(--surf2)", fontSize: 11, color: "var(--txt3)", lineHeight: 1.6 }}>
                   ℹ The breakdown above shows relative coverage composition. Your exact premium is personalised to your 20+ risk factors and confirmed in writing at policy issuance.
                 </div>
-                {isLocal && <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "#fffbeb", border: "1px solid #fef3c7", color: "#92400e", fontSize: 11 }}>⚠ Local calculation (simplified factor model) — ML backend unavailable. This estimate may differ from the actuarial model result once connectivity is restored.</div>}
+                {isLocal && <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "#fffbeb", border: "1px solid #fef3c7", color: "#92400e", fontSize: 11 }}>⚠ Provisional estimate (simplified factor model) — the pricing service could not be reached. Your answers have been saved and will be repriced on the actuarial model automatically, so this quote still reaches the underwriting team. The confirmed premium may differ from the figure above.</div>}
               </div>
 
               {/* Value stack — product & service differentiation */}
