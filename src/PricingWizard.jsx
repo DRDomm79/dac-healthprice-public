@@ -108,6 +108,33 @@ const TIERS = {
   Platinum: { limit: "$150,000", room: "Private Suite",  surg: "$80,000", icu: "30 days", ded: "$0",    dedN: 0 },
 };
 const STEPS = ["Profile", "Health", "Lifestyle", "Plan", "Review", "Quote"];
+
+// What each optional rider covers. Monetary caps are deliberately absent:
+// they are not defined anywhere in the rating basis, so the schedule points
+// at the policy wording rather than showing a figure that is not real.
+const RIDER_SCHEDULE = {
+  include_opd: {
+    name: "OPD — outpatient",
+    rows: [
+      ["Covered", "Consultations, laboratory tests and day procedures"],
+      ["Waiting period", "None"],
+    ],
+  },
+  include_dental: {
+    name: "Dental",
+    rows: [
+      ["Covered", "Cleanings, fillings and extractions"],
+      ["Waiting period", "None"],
+    ],
+  },
+  include_maternity: {
+    name: "Maternity",
+    rows: [
+      ["Covered", "Prenatal care, delivery and newborn cover"],
+      ["Waiting period", "10 months from the policy start date"],
+    ],
+  },
+};
 const FB_FREQ = { ipd: 0.12, opd: 2.5, dental: 0.8, maternity: 0.15 };
 const FB_SEV = { ipd: 2500, opd: 60, dental: 120, maternity: 3500 };
 const TIER_F = { Bronze: 0.70, Silver: 1.00, Gold: 1.45, Platinum: 2.10 };
@@ -1166,6 +1193,44 @@ export default function PricingWizard() {
                 <div className="bk-row"><span className="bk-l">Room type</span><span className="bk-v">{TIERS[inp.ipd_tier].room}</span></div>
                 <div className="bk-row"><span className="bk-l">Deductible</span><span className="bk-v">{TIERS[inp.ipd_tier].ded}</span></div>
                 <div className="bk-row"><span className="bk-l">Optional riders</span><span className="bk-v">{[inp.include_opd && "OPD", inp.include_dental && "Dental", inp.include_maternity && "Maternity"].filter(Boolean).join(", ") || "None"}</span></div>
+              </div>
+
+              {/* Benefit schedule — what is actually being bought, shown before
+                  the applicant confirms rather than only on the quote. */}
+              <div className="card">
+                <div className="card-label">Benefit schedule</div>
+                <div style={{ fontSize: 11, color: "var(--txt3)", marginBottom: 12, lineHeight: 1.6 }}>
+                  What this plan pays. Amounts are per policy year, per insured person.
+                </div>
+
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--txt2)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                  IPD — hospitalisation ({inp.ipd_tier})
+                </div>
+                <div className="bk-row"><span className="bk-l">Annual benefit limit</span><span className="bk-v">{TIERS[inp.ipd_tier].limit}</span></div>
+                <div className="bk-row"><span className="bk-l">Room and board</span><span className="bk-v">{TIERS[inp.ipd_tier].room}</span></div>
+                <div className="bk-row"><span className="bk-l">Surgical limit</span><span className="bk-v">{TIERS[inp.ipd_tier].surg}</span></div>
+                <div className="bk-row"><span className="bk-l">Intensive care</span><span className="bk-v">{TIERS[inp.ipd_tier].icu}</span></div>
+                <div className="bk-row"><span className="bk-l">Deductible per claim</span><span className="bk-v">{TIERS[inp.ipd_tier].ded}</span></div>
+
+                {Object.entries(RIDER_SCHEDULE)
+                  .filter(([key]) => inp[key])
+                  .map(([key, r]) => (
+                    <div key={key} style={{ marginTop: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--txt2)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                        {r.name}
+                      </div>
+                      {r.rows.map(([l, v]) => (
+                        <div className="bk-row" key={l}><span className="bk-l">{l}</span><span className="bk-v">{v}</span></div>
+                      ))}
+                      <div className="bk-row"><span className="bk-l">Benefit limit</span><span className="bk-v" style={{ color: "var(--txt3)" }}>Per policy wording</span></div>
+                    </div>
+                  ))}
+
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--surf3)", fontSize: 10.5, color: "var(--txt3)", lineHeight: 1.7 }}>
+                  Pre-existing conditions declared above are assessed by an underwriter and may be
+                  excluded or loaded. This schedule is a summary — the policy wording issued with
+                  your certificate governs what is payable.
+                </div>
               </div>
 
               {uwFlags.length > 0 && (
